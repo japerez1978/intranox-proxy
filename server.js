@@ -198,6 +198,90 @@ async function router(req, res) {
     }
     return;
   }
+  // ── GET /companies ────────────────────────────────────
+  // Buscar empresas por nombre
+  if (method === 'GET' && url.pathname === '/companies') {
+    const query = url.searchParams.get('q') || '';
+    const body = {
+      filterGroups: [{
+        filters: [{
+          propertyName: "name",
+          operator: "CONTAINS_TOKEN",
+          value: `*${query}*`
+        }]
+      }],
+      properties: ["name", "domain"],
+      limit: 10
+    };
+    try {
+      const result = await hsRequest('POST', '/crm/v3/objects/companies/search', body);
+      res.writeHead(result.status, CORS_HEADERS);
+      res.end(JSON.stringify(result.body));
+    } catch (e) {
+      res.writeHead(500, CORS_HEADERS);
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+
+  // ── GET /deals ────────────────────────────────────────
+  // Buscar negocios por nombre
+  if (method === 'GET' && url.pathname === '/deals') {
+    const query = url.searchParams.get('q') || '';
+    const body = {
+      filterGroups: [{
+        filters: [{
+          propertyName: "dealname",
+          operator: "CONTAINS_TOKEN",
+          value: `*${query}*`
+        }]
+      }],
+      properties: ["dealname", "amount"],
+      limit: 10
+    };
+    try {
+      const result = await hsRequest('POST', '/crm/v3/objects/deals/search', body);
+      res.writeHead(result.status, CORS_HEADERS);
+      res.end(JSON.stringify(result.body));
+    } catch (e) {
+      res.writeHead(500, CORS_HEADERS);
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+
+  // ── GET /ofertas/versiones/:dealId ────────────────────
+  // Calcular siguiente versión del negocio
+  const versionMatch = url.pathname.match(/^\/ofertas\/versiones\/(.+)$/);
+  if (method === 'GET' && versionMatch) {
+    const dealId = versionMatch[1];
+    const body = {
+      limit: 1,
+      sorts: [{ propertyName: "n__de_oferta", direction: "DESCENDING" }],
+      properties: ["n__de_oferta"],
+      filterGroups: [{
+        filters: [{
+          propertyName: "associations.deal",
+          operator: "EQ",
+          value: dealId
+        }]
+      }]
+    };
+    try {
+      const result = await hsRequest('POST', `/crm/v3/objects/${HS_OBJECT_ID}/search`, body);
+      const data = result.body || {};
+      const count = data.total || 0;
+      res.writeHead(result.status, CORS_HEADERS);
+      res.end(JSON.stringify({
+        siguiente: count + 1,
+        total: count
+      }));
+    } catch (e) {
+      res.writeHead(500, CORS_HEADERS);
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
 
   // ── 404 ───────────────────────────────────────────────
   res.writeHead(404, CORS_HEADERS);
