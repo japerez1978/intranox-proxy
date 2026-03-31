@@ -194,4 +194,75 @@ async function router(req, res) {
     if (filters.length > 0) body.filterGroups = [{ filters }];
 
     try {
-      const result = await hsRequest('POST', '/crm/v3/
+      const result = await hsRequest('POST', '/crm/v3/objects/deals/search', body);
+      res.writeHead(result.status, CORS_HEADERS);
+      res.end(JSON.stringify(result.body));
+    } catch (e) {
+      res.writeHead(500, CORS_HEADERS);
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+
+  // ── GET /contacts 
+  if (method === 'GET' && urlParams.pathname === '/contacts') {
+    const query = urlParams.searchParams.get('q') || '';
+    const companyId = urlParams.searchParams.get('companyId');
+    const body = { properties: ["firstname", "lastname", "email"], limit: 100 };
+    
+    const filtersBase = [];
+    if (companyId) filtersBase.push({ propertyName: "associations.company", operator: "EQ", value: companyId });
+
+    if (query) {
+      body.filterGroups = [
+        { filters: [...filtersBase, { propertyName: "firstname", operator: "CONTAINS_TOKEN", value: `*${query}*` }] },
+        { filters: [...filtersBase, { propertyName: "lastname", operator: "CONTAINS_TOKEN", value: `*${query}*` }] }
+      ];
+    } else if (filtersBase.length > 0) {
+      body.filterGroups = [{ filters: filtersBase }];
+    }
+
+    try {
+      const result = await hsRequest('POST', '/crm/v3/objects/contacts/search', body);
+      res.writeHead(result.status, CORS_HEADERS);
+      res.end(JSON.stringify(result.body));
+    } catch (e) {
+      res.writeHead(500, CORS_HEADERS);
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+
+  // ── GET /ofertas/versiones/:dealId 
+  const versionMatch = urlParams.pathname.match(/^\/ofertas\/versiones\/(.+)$/);
+  if (method === 'GET' && versionMatch) {
+    const dealId = versionMatch[1];
+    const body = {
+      limit: 1,
+      sorts: [{ propertyName: "n__de_oferta", direction: "DESCENDING" }],
+      properties: ["n__de_oferta"],
+      filterGroups: [{ filters: [{ propertyName: "associations.deal", operator: "EQ", value: dealId }] }]
+    };
+    try {
+      const result = await hsRequest('POST', `/crm/v3/objects/${HS_OBJECT_ID}/search`, body);
+      const count = result.body?.total || 0;
+      res.writeHead(result.status, CORS_HEADERS);
+      res.end(JSON.stringify({ siguiente: count + 1, total: count }));
+    } catch (e) {
+      res.writeHead(500, CORS_HEADERS);
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+
+  // ── 404
+  res.writeHead(404, CORS_HEADERS);
+  res.end(JSON.stringify({ error: 'Ruta no encontrada' }));
+}
+
+const server = http.createServer(router);
+server.listen(PORT, () => {
+  console.log(`✅ INTRANOX HubSpot Proxy corriendo en puerto ${PORT}`);
+  console.log(`   Objeto HubSpot: ${HS_OBJECT_ID}`);
+  console.log(`   Token configurado: ${HS_TOKEN ? 'Sí ✓' : 'No ✗'}`);
+});
